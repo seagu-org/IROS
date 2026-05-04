@@ -101,18 +101,27 @@ def plot_reservoir_timeseries(obs_df, scenario_results, level_reference_df=None)
         row=1,
         col=1,
     )
-    fig.add_trace(
-        go.Scatter(
-            x=obs_df["datetime"],
-            y=obs_df["outflow_m3s"],
-            name="Qout mặc định",
-            mode="lines",
-            line={"color": SCENARIO_COLORS[0]},
-            hovertemplate="Ngày giờ=%{x|%Y-%m-%d %H:%M}<br>Giá trị=%{y:.2f} m3/s<extra></extra>",
-        ),
-        row=1,
-        col=1,
-    )
+    default_payload = scenario_results.get("default_outflow")
+    default_source = default_payload.get("outflow_source") if isinstance(default_payload, dict) else None
+    if default_source == "Qout_estimated_default" and isinstance(default_payload, dict):
+        default_df = default_payload["simulation"]
+        default_name = "Qout ước tính mặc định"
+    else:
+        default_df = obs_df
+        default_name = "Qout mặc định"
+    if default_df is not None and "outflow_m3s" in default_df:
+        fig.add_trace(
+            go.Scatter(
+                x=default_df["datetime"],
+                y=default_df["outflow_m3s"],
+                name=default_name,
+                mode="lines",
+                line={"color": SCENARIO_COLORS[0]},
+                hovertemplate="Ngày giờ=%{x|%Y-%m-%d %H:%M}<br>Giá trị=%{y:.2f} m3/s<extra></extra>",
+            ),
+            row=1,
+            col=1,
+        )
 
     for name, payload in scenario_results.items():
         sim = payload["simulation"] if isinstance(payload, dict) else payload

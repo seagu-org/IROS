@@ -1,81 +1,103 @@
-# Bảng điều khiển vận hành hồ thủy điện
+﻿# Dashboard vận hành hồ thủy điện
 
-Dự án này cung cấp dashboard Streamlit để người vận hành hồ thủy điện kiểm tra lưu lượng đến quan trắc hoặc dự báo, lưu lượng xả mặc định, dung tích mô phỏng, mực nước mô phỏng, mùa đang áp dụng, các đường tham chiếu mực nước và dung tích theo thông số hồ chứa, cùng các kịch bản xả có thể chỉnh sửa.
+Dashboard này hỗ trợ xem dữ liệu lưu lượng đến, lưu lượng xả, mực nước, dung tích mô phỏng và so sánh các kịch bản xả cho từng hồ chứa. Repo có hai cách chạy chính:
 
-## Tệp đầu vào bắt buộc
+- Chạy trực tiếp bằng Streamlit để phát triển, kiểm tra dữ liệu và dùng nội bộ.
+- Build bản desktop `.exe` khi cần gửi cho người dùng không làm việc trực tiếp với Python/source code.
 
-- `data/reservoir_id.csv`
-  - Cột bắt buộc: `reservoir_name_en`
-- `data/reservoir_parameters.csv`
-  - Dùng `reservoir_name_en`, `parameter_name`, `value`, và `unit` khi có.
-- `data/AEV_obs/`
-  - Các tệp đường quan hệ AEV của hồ chứa. Các cột kỳ vọng là `CaoTrinh_m`, `Dientich_km2`, và `Dungtich_10^6m3`.
-- `data/level_constraints.csv`
-  - Các cột kỳ vọng: `regulation_id`, `reservoir_name_en`, `season`, `period_start_mmdd`, `period_end_mmdd`, `constraint_type`, `level_min_m`, `level_max_m`, `article_ref`.
-- `data/Q/2025/<reservoir_name_en>.xlsx`
-  - Các cột chuỗi thời gian kỳ vọng: ngày, giờ, lưu lượng đến, lưu lượng xả, và mực nước.
+## 1. Cấu trúc quan trọng
 
-## Cột chuỗi thời gian đã làm sạch
-
-Các tệp Excel được chuyển thành `data/Q/csv/<reservoir_name_en>.csv` với tên cột ASCII ổn định:
-
-- `datetime`
-- `date`
-- `hour`
-- `reservoir_name_en`
-- `inflow_m3s`
-- `outflow_m3s`
-- `water_level_m`
-
-Các dòng có cột giờ chứa `TB` được loại bỏ vì đó là dòng trung bình, không phải dòng mô phỏng theo giờ.
-
-Notebook không dùng GUI và các ví dụ script đọc trực tiếp từ `data/Q/csv/`. Với một thời kỳ mới, hãy cập nhật các CSV đã làm sạch trong thư mục đó. Nếu tệp Excel nguồn thay đổi, hãy chạy lại script chuyển đổi trước khi chạy notebook.
-
-Trong dashboard, người dùng cũng có thể tải lên CSV riêng cho một lần chạy từ thanh bên. CSV tải lên chỉ được dùng trong phiên Streamlit hiện tại và không ghi đè tệp trong `data/Q/csv/`. Tệp tải lên phải có:
-
-- `datetime`
-- `inflow_m3s`
-- `outflow_m3s`
-
-Các cột tùy chọn:
-
-- `reservoir_name_en`
-- `water_level_m`
-
-## Chuyển Excel sang CSV
-
-Từ thư mục gốc của repository:
-
-```bash
-python reservoir_dashboard/scripts/convert_q_2025_excel_to_csv.py
+```text
+reservoir_dashboard/app.py        # Ứng dụng Streamlit
+reservoir_dashboard/src/          # Module đọc dữ liệu, mô phỏng, vẽ biểu đồ
+run_dashboard.py                  # Launcher chạy Streamlit bằng Python
+run_desktop_dashboard.py          # GUI desktop PySide6
+build_desktop_exe.cmd             # Lệnh build exe trên Windows
+build_desktop_exe.ps1             # Script build exe bằng Nuitka
+requirements.txt                  # Phụ thuộc cho Streamlit
+requirements-desktop.txt          # Phụ thuộc cho GUI desktop/exe
+environment-desktop.yml           # Môi trường Conda khuyến nghị cho build exe
+data/                             # Dữ liệu bắt buộc khi chạy dashboard
 ```
 
-Dashboard không còn hiển thị điều khiển tạo lại CSV trong giao diện. Hãy dùng script trên khi dữ liệu Excel đầu vào thay đổi.
+## 2. Dữ liệu đầu vào
 
-## Chạy dashboard
+Các file/thư mục sau cần có trong `data/`:
 
-Cài đặt các thư viện phụ thuộc trong môi trường Python:
+- `data/reservoir_id.csv`: danh sách hồ chứa, cần cột `reservoir_name_en`.
+- `data/reservoir_parameters.csv`: thông số hồ chứa, dùng các cột `reservoir_name_en`, `parameter_name`, `value`, `unit`.
+- `data/level_constraints.csv`: thông tin mùa và ràng buộc mực nước.
+- `data/AEV_obs/`: đường quan hệ cao trình - diện tích - dung tích của từng hồ.
+- `data/Q/csv/`: chuỗi thời gian đã làm sạch cho từng hồ.
 
-```bash
-pip install streamlit pandas numpy plotly openpyxl pytest
+CSV chuỗi thời gian trong `data/Q/csv/` cần có tối thiểu:
+
+- `datetime`
+- `inflow_m3s`
+
+Để mô phỏng lưu lượng xả mặc định, CSV cần có một trong hai nhóm dữ liệu:
+
+- `outflow_m3s`: dùng trực tiếp làm lưu lượng xả mặc định trong CSV.
+- Hoặc `water_level_m` cùng với `inflow_m3s`: dashboard sẽ ước tính lưu lượng xả mặc định bằng cân bằng khối lượng hồ chứa.
+
+Các cột nên có thêm:
+
+- `reservoir_name_en`
+- `water_level_m`
+
+Trong Streamlit, người dùng có thể tải lên một CSV riêng cho phiên chạy hiện tại. File tải lên không ghi đè dữ liệu trong `data/Q/csv/`.
+
+## 3. Ước tính lưu lượng xả khi thiếu `outflow_m3s`
+
+Nếu `outflow_m3s` bị thiếu nhưng có `inflow_m3s`, `water_level_m`, và đường quan hệ AEV, dashboard sẽ tính:
+
+```text
+estimated_outflow_m3s = inflow_m3s - storage_change_m3 / dt_seconds
 ```
 
-Chạy:
+Trong đó dung tích `storage_m3` được nội suy từ `water_level_m` theo AEV, `storage_change_m3 = storage_t - storage_t_minus_1`, và `dt_seconds` lấy từ khoảng cách giữa hai thời điểm liên tiếp.
 
-```bash
+Chuỗi này được ghi nhãn rõ là `Qout ước tính mặc định`, không được xem là `outflow_m3s` quan trắc. Dữ liệu đầu ra có thêm các cờ:
+
+- `negative_outflow_flag`
+- `outside_reasonable_range_flag`
+- `missing_water_level_flag`
+- `missing_inflow_flag`
+
+Nếu giá trị ước tính âm, dashboard giữ nguyên giá trị và hiển thị cảnh báo. Không tự động cắt về 0 vì giá trị âm có thể chỉ ra lưu lượng đến bị đánh giá thấp, mực nước nhiễu, sai đường AEV, thiếu mưa trực tiếp trên mặt hồ, lệch timestamp, hoặc vấn đề chất lượng dữ liệu.
+
+## 4. Chạy dashboard bằng Streamlit
+
+Từ thư mục gốc repo, tạo và kích hoạt môi trường Python. Trên Windows PowerShell:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+Chạy dashboard:
+
+```powershell
 streamlit run reservoir_dashboard/app.py
 ```
 
-## Chạy GUI desktop
+Hoặc chạy qua launcher của repo:
 
-Nếu Streamlit khó đóng gói thành `.exe`, có thể dùng GUI desktop PySide6:
-
-```bash
-pip install -r requirements-desktop.txt
-python run_desktop_dashboard.py
+```powershell
+python run_dashboard.py
 ```
 
-Khuyến nghị dùng môi trường Conda riêng cho GUI desktop để tránh xung đột Qt trong môi trường nghiên cứu hiện tại:
+Sau khi chạy, mở địa chỉ Streamlit hiển thị trong terminal, thường là:
+
+```text
+http://localhost:8501
+```
+
+## 5. Chạy GUI desktop khi chưa build exe
+
+Dùng cách này để kiểm tra giao diện desktop trước khi đóng gói:
 
 ```powershell
 conda env create -f environment-desktop.yml
@@ -83,88 +105,64 @@ conda activate reservoir_desktop
 python run_desktop_dashboard.py
 ```
 
-GUI desktop dùng lại các module mô phỏng trong `reservoir_dashboard/src`, đọc dữ liệu từ `data/`, hỗ trợ chọn hồ chứa, cửa sổ thời gian, mực nước ban đầu, kịch bản xả cơ bản, biểu đồ Qin/Qout/mực nước/dung tích, bảng so sánh kịch bản, tải CSV quan trắc riêng, và xuất CSV mô phỏng.
-
-Để build `.exe` bằng Nuitka:
+Nếu môi trường `reservoir_desktop` đã tồn tại:
 
 ```powershell
-.\build_desktop_exe.ps1
+conda activate reservoir_desktop
+python run_desktop_dashboard.py
 ```
 
-File đầu ra mặc định là `ReservoirDashboardDesktop.exe`. Cách này không phân phối source `.py` trực tiếp như chạy Streamlit, nhưng không phải cơ chế bảo vệ tuyệt đối trước reverse engineering.
+## 6. Build file exe mới
 
-## Cửa sổ thời gian đã chọn
+Build exe khi đã kiểm tra GUI desktop chạy đúng:
 
-Người vận hành chọn hồ chứa, thời điểm bắt đầu, và một trong các độ dài:
+```powershell
+conda activate reservoir_desktop
+.\build_desktop_exe.cmd -Clean
+```
 
-- 24 giờ
-- 48 giờ
-- 72 giờ
-- 1 tuần
-- 2 tuần
-- thời điểm kết thúc tùy chỉnh
-
-Cửa sổ dữ liệu đã chọn được dùng cho lưu lượng đến, lưu lượng xả mặc định, mực nước ban đầu, mô phỏng, chỉ số, so sánh kịch bản, và chọn mùa. Các tab thiết lập và chẩn đoán cũng hiển thị thời kỳ mô phỏng khả dụng trong tệp CSV đã làm sạch của hồ chứa đã chọn.
-
-## Giai đoạn 1: mô phỏng cơ sở
-
-Mô phỏng cơ sở dùng lưu lượng xả mặc định và phương trình cân bằng khối lượng:
+Kết quả mặc định:
 
 ```text
-S_next = S_current + (Q_in - Q_out) * dt_seconds
+dist\ReservoirDashboardDesktop\ReservoirDashboardDesktop.exe
 ```
 
-Dung tích ban đầu được suy ra từ mực nước hợp lệ đầu tiên trong cửa sổ đã chọn bằng đường quan hệ AEV của hồ chứa. Dung tích được lưu nội bộ theo mét khối và hiển thị theo triệu mét khối khi phù hợp.
+Khi gửi cho người dùng, gửi toàn bộ thư mục:
 
-Trong thanh bên dashboard, người dùng có thể chọn mực nước ban đầu lấy từ CSV hoặc nhập giá trị tùy chỉnh. Với các lần chạy không dùng GUI, đặt `custom_initial_water_level_m` trong `non_GUI.ipynb` hoặc ví dụ script để ghi đè mực nước ban đầu suy ra từ CSV cho một lần chạy cụ thể.
+```text
+dist\ReservoirDashboardDesktop
+```
 
-Nếu cân bằng khối lượng làm dung tích vượt ngoài miền vật lý của đường AEV, mô phỏng sẽ giới hạn dung tích và mực nước tại biên AEV. Đầu ra giữ `unbounded_storage_m3` để chẩn đoán và đánh dấu các dòng bị ảnh hưởng bằng `physical_limit_violation=True`, `physical_limit_type`, và `physical_limit_excess_mcm`.
+Không chỉ gửi riêng file `.exe`, vì bản desktop cần các thư viện và dữ liệu đi kèm trong cùng thư mục.
 
-## Giai đoạn 2: chỉnh sửa kịch bản
+Nếu thật sự cần bản một file duy nhất, có thể build thêm:
 
-Tab kịch bản hỗ trợ:
+```powershell
+.\build_desktop_exe.cmd -Clean -OneFile
+```
 
-- lưu lượng xả mặc định
-- lưu lượng xả không đổi
-- lưu lượng xả theo hệ số nhân
-- lưu lượng xả thay thế trong một khoảng thời gian đã chọn
-- chỉnh sửa lưu lượng xả thủ công bằng `st.data_editor`
+Chỉ dùng `-OneFile` sau khi bản thư mục `dist\ReservoirDashboardDesktop` đã chạy ổn trên máy đích.
 
-Ứng dụng so sánh mô phỏng cơ sở và kịch bản tùy chỉnh đã chọn cạnh nhau bằng các chỉ số tóm tắt và các tệp CSV có thể tải xuống. So sánh kịch bản bao gồm `hours_to_fill_from_average_inflow` và `days_to_fill_from_average_inflow`.
+## 7. Khi nào cần build lại exe
 
-## Biểu đồ và chú giải
+Cần build lại exe khi có thay đổi trong:
 
-Dashboard dùng ba biểu đồ con đồng bộ:
+- `run_desktop_dashboard.py`
+- `reservoir_dashboard/src/`
+- `data/` nếu muốn dữ liệu mới được đóng gói sẵn trong bản gửi đi
+- `requirements-desktop.txt` hoặc `environment-desktop.yml`
+- `build_desktop_exe.ps1` hoặc `build_desktop_exe.cmd`
 
-- Lưu lượng: các chuỗi `Qin`, `Qout_default`, và `Qout_<scenario>` tùy chỉnh.
-- Mực nước: các chuỗi `WL_default` và `WL_<scenario>` tùy chỉnh.
-- Dung tích: các chuỗi `V_default` và `V_<scenario>` tùy chỉnh.
+Không cần build lại exe nếu chỉ chạy thử Streamlit trên máy phát triển bằng source hiện tại.
 
-Với mỗi kịch bản, Qout, WL, và V dùng cùng một màu đường. Nội dung hover ngắn gọn và chỉ hiển thị ngày cùng giá trị cho đường gần nhất. Các đường tham chiếu ngang không hiển thị hover.
+Xem hướng dẫn chi tiết hơn tại [HUONG_DAN_TAO_CAP_NHAT_EXE.md](HUONG_DAN_TAO_CAP_NHAT_EXE.md).
 
-## Chọn mùa và mực nước tham chiếu
+## 8. Dọn file build/cache
 
-Mùa đang áp dụng được chọn tự động theo thời điểm cuối cùng của cửa sổ mô phỏng đã chọn. Ứng dụng chuyển thời điểm đó sang `mmdd` và lọc các dòng giai đoạn mùa của hồ chứa đã chọn để lấy những dòng có giai đoạn chứa `mmdd`. Dashboard không có bộ chọn chế độ mùa hiển thị.
+Các thư mục/file build như `build/`, `dist/`, `.nuitka-cache/`, `_MEI*/`, `*.exe`, `*.log`, `nuitka-crash-report.xml` là artifact cục bộ và không cần commit. Khi muốn build lại sạch, dùng:
 
-Biểu đồ mực nước vẽ các đường tham chiếu ngang từ `reservoir_parameters.csv` khi có các thuộc tính đó. Biểu đồ dung tích vẽ các đường tham chiếu dung tích tương ứng bằng đường quan hệ AEV. Nếu không có mực nước phù hợp, các thuộc tính dung tích trực tiếp như `total_storage_at_nwl` hoặc `dead_storage` được dùng khi phù hợp.
+```powershell
+.\build_desktop_exe.cmd -Clean
+```
 
-Trong mùa lũ, ứng dụng cố gắng vẽ:
-
-- `normal_water_level` - Mực nước dâng bình thường
-- `dead_water_level` - Mực nước chết
-- `design_flood_level` - Mực nước lũ thiết kế
-- `flood_check_level` - Mực nước lũ kiểm tra
-
-Trong mùa cạn, ứng dụng cố gắng vẽ:
-
-- `normal_water_level` - Mực nước dâng bình thường
-- `dead_water_level` - Mực nước chết
-
-Ứng dụng hiện không kiểm tra vi phạm ràng buộc mực nước.
-
-## Hạn chế đã biết
-
-- Chưa triển khai tối ưu hóa.
-- Ứng dụng phụ thuộc vào các tệp đầu vào tường minh và không tự suy luận quy tắc mùa hoặc mực nước thông số bị thiếu.
-- Nếu hồ chứa không có đường quan hệ AEV, mô phỏng bị tắt cho hồ chứa đó.
-- Nếu môi trường thiếu `openpyxl`, chuyển đổi Excel sang CSV không thể chạy cho đến khi cài đặt gói đó.
+Nếu cần dọn thủ công, chỉ xóa các artifact đã được liệt kê trong `.gitignore`, không xóa `data/`, `reservoir_dashboard/`, `run_desktop_dashboard.py`, hoặc các file `requirements*.txt`.

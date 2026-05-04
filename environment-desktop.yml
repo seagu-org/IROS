@@ -1,0 +1,15 @@
+name: reservoir_desktop
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - numpy
+  - pandas
+  - openpyxl
+  - matplotlib
+  - pip
+  - pip:
+      - PySide6==6.7.3
+      - nuitka
+      - ordered-set
+      - zstandard

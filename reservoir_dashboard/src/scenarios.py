@@ -6,32 +6,56 @@ import pandas as pd
 from .metrics import calculate_end_of_window_capacity_metrics
 
 
-def _scenario_frame(obs_df, values, name):
-    return pd.DataFrame({
+def _scenario_frame(obs_df, values, name, source_label=None):
+    out = pd.DataFrame({
         "datetime": pd.to_datetime(obs_df["datetime"]),
         "outflow_m3s": pd.to_numeric(values, errors="coerce"),
         "scenario_name": name,
     })
+    if source_label is not None:
+        out["outflow_source"] = source_label
+    return out
 
 
-def make_default_outflow(obs_df):
-    return _scenario_frame(obs_df, obs_df["outflow_m3s"], "default_outflow")
+def _series_or_nan(obs_df, column):
+    if column in obs_df.columns:
+        return pd.to_numeric(obs_df[column], errors="coerce")
+    return pd.Series(np.nan, index=obs_df.index, dtype=float)
+
+
+def default_outflow_values(obs_df, source="auto"):
+    observed = _series_or_nan(obs_df, "outflow_m3s")
+    estimated = _series_or_nan(obs_df, "estimated_outflow_m3s")
+    if source == "observed":
+        return observed, "observed_outflow_m3s"
+    if source == "estimated":
+        return estimated, "Qout_estimated_default"
+    if observed.notna().any():
+        return observed, "observed_outflow_m3s"
+    return estimated, "Qout_estimated_default"
+
+
+def make_default_outflow(obs_df, source="auto"):
+    values, label = default_outflow_values(obs_df, source)
+    return _scenario_frame(obs_df, values, "default_outflow", label)
 
 
 def make_constant_outflow(obs_df, value_m3s):
     return _scenario_frame(obs_df, float(value_m3s), "constant_outflow")
 
 
-def make_multiplier_outflow(obs_df, multiplier):
-    return _scenario_frame(obs_df, pd.to_numeric(obs_df["outflow_m3s"], errors="coerce") * float(multiplier), f"multiplier_{float(multiplier):g}")
+def make_multiplier_outflow(obs_df, multiplier, source="auto"):
+    base, label = default_outflow_values(obs_df, source)
+    return _scenario_frame(obs_df, base * float(multiplier), f"multiplier_{float(multiplier):g}", label)
 
 
-def make_time_window_outflow(obs_df, start, end, value_m3s):
-    out = pd.to_numeric(obs_df["outflow_m3s"], errors="coerce").copy()
+def make_time_window_outflow(obs_df, start, end, value_m3s, source="auto"):
+    out, label = default_outflow_values(obs_df, source)
+    out = out.copy()
     dt = pd.to_datetime(obs_df["datetime"])
     mask = (dt >= pd.to_datetime(start)) & (dt <= pd.to_datetime(end))
     out.loc[mask] = float(value_m3s)
-    return _scenario_frame(obs_df, out, "time_window_adjustment")
+    return _scenario_frame(obs_df, out, "time_window_adjustment", label)
 
 
 def make_manual_outflow(edited_df):
