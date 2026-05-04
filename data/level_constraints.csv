@@ -1,0 +1,64 @@
+regulation_id,reservoir_name_en,season,period_start_mmdd,period_end_mmdd,constraint_type,level_min_m,level_max_m,article_ref,,,
+qd_911_qd_ttg_2018_tra_khuc,DakDrinh,flood_season,901,1215,max_pre_flood,,405,"Article 7.2, Table 2",,,314
+qd_911_qd_ttg_2018_tra_khuc,DakDrinh,flood_season,901,1215,min_pre_flood,400,,"Article 7.3, Table 3",,,314
+qd_911_qd_ttg_2018_tra_khuc,DakDrinh,dry_season,1216,1220,dry_operating_band,407.4,409,Appendix III,,,4
+qd_911_qd_ttg_2018_tra_khuc,DakDrinh,dry_season,1221,1231,dry_operating_band,407.4,409,Appendix III,,,10
+qd_911_qd_ttg_2018_tra_khuc,DakDrinh,dry_season,101,110,dry_operating_band,407.3,408.9,Appendix III,,,9
+qd_911_qd_ttg_2018_tra_khuc,DakDrinh,dry_season,111,120,dry_operating_band,407.3,408.9,Appendix III,,,9
+qd_911_qd_ttg_2018_tra_khuc,DakDrinh,dry_season,121,131,dry_operating_band,407.2,408.8,Appendix III,,,10
+qd_911_qd_ttg_2018_tra_khuc,DakDrinh,dry_season,201,210,dry_operating_band,407.2,408.8,Appendix III,,,9
+qd_911_qd_ttg_2018_tra_khuc,DakDrinh,dry_season,211,220,dry_operating_band,407.1,408.7,Appendix III,,,9
+qd_911_qd_ttg_2018_tra_khuc,DakDrinh,dry_season,221,229,dry_operating_band,407,408.6,Appendix III,,,
+qd_911_qd_ttg_2018_tra_khuc,DakDrinh,dry_season,301,310,dry_operating_band,406.6,408.2,Appendix III,,,9
+qd_911_qd_ttg_2018_tra_khuc,DakDrinh,dry_season,311,320,dry_operating_band,405.9,407.5,Appendix III,,,9
+qd_911_qd_ttg_2018_tra_khuc,DakDrinh,dry_season,321,331,dry_operating_band,405.1,406.7,Appendix III,,,10
+qd_911_qd_ttg_2018_tra_khuc,DakDrinh,dry_season,401,410,dry_operating_band,404.1,405.7,Appendix III,,,9
+qd_911_qd_ttg_2018_tra_khuc,DakDrinh,dry_season,411,420,dry_operating_band,403.5,405.1,Appendix III,,,9
+qd_911_qd_ttg_2018_tra_khuc,DakDrinh,dry_season,421,430,dry_operating_band,402.7,404.3,Appendix III,,,9
+qd_911_qd_ttg_2018_tra_khuc,DakDrinh,dry_season,501,510,dry_operating_band,401.8,403.4,Appendix III,,,9
+qd_911_qd_ttg_2018_tra_khuc,DakDrinh,dry_season,511,520,dry_operating_band,400.1,401.7,Appendix III,,,9
+qd_911_qd_ttg_2018_tra_khuc,DakDrinh,dry_season,521,531,dry_operating_band,398.2,399.8,Appendix III,,,10
+qd_911_qd_ttg_2018_tra_khuc,DakDrinh,dry_season,601,610,dry_operating_band,396.4,398,Appendix III,,,9
+qd_911_qd_ttg_2018_tra_khuc,DakDrinh,dry_season,611,620,dry_operating_band,395.1,396.7,Appendix III,,,9
+qd_911_qd_ttg_2018_tra_khuc,DakDrinh,dry_season,621,630,dry_operating_band,393.5,395.1,Appendix III,,,9
+qd_911_qd_ttg_2018_tra_khuc,DakDrinh,dry_season,701,710,dry_operating_band,391.9,393.5,Appendix III,,,9
+qd_911_qd_ttg_2018_tra_khuc,DakDrinh,dry_season,711,720,dry_operating_band,389.8,391.4,Appendix III,,,9
+qd_911_qd_ttg_2018_tra_khuc,DakDrinh,dry_season,721,731,dry_operating_band,387.3,388.9,Appendix III,,,10
+qd_911_qd_ttg_2018_tra_khuc,DakDrinh,dry_season,801,810,dry_operating_band,384.7,386.3,Appendix III,,,9
+qd_911_qd_ttg_2018_tra_khuc,DakDrinh,dry_season,811,820,dry_operating_band,381.8,383.4,Appendix III,,,9
+qd_911_qd_ttg_2018_tra_khuc,DakDrinh,dry_season,821,831,dry_operating_band,380,381.6,Appendix III,,,10
+qd_911_qd_ttg_2018_tra_khuc,NuocTrong,flood_season,901,1215,safety_levels,,131.4,Article 1.1.a; Article 4.2,,,314
+qd_911_qd_ttg_2018_tra_khuc,NuocTrong,flood_season,901,920,max_pre_flood,,116,"Article 7.2, Table 2",,,19
+qd_911_qd_ttg_2018_tra_khuc,NuocTrong,flood_season,921,1114,max_pre_flood,,120,"Article 7.2, Table 2",,,193
+qd_911_qd_ttg_2018_tra_khuc,NuocTrong,flood_season,1115,1215,max_pre_flood,,121,"Article 7.2, Table 2",,,100
+qd_911_qd_ttg_2018_tra_khuc,NuocTrong,flood_season,901,920,min_pre_flood,115.5,,"Article 7.3, Table 3",,,19
+qd_911_qd_ttg_2018_tra_khuc,NuocTrong,flood_season,921,1114,min_pre_flood,118.5,,"Article 7.3, Table 3",,,193
+qd_911_qd_ttg_2018_tra_khuc,NuocTrong,flood_season,1115,1215,min_pre_flood,119.5,,"Article 7.3, Table 3",,,100
+qd_911_qd_ttg_2018_tra_khuc,NuocTrong,dry_season,1216,1220,dry_operating_band,123,126,Appendix III,,,4
+qd_911_qd_ttg_2018_tra_khuc,NuocTrong,dry_season,1221,1231,dry_operating_band,123,126,Appendix III,,,10
+qd_911_qd_ttg_2018_tra_khuc,NuocTrong,dry_season,101,110,dry_operating_band,123,126,Appendix III,,,9
+qd_911_qd_ttg_2018_tra_khuc,NuocTrong,dry_season,111,120,dry_operating_band,123,126,Appendix III,,,9
+qd_911_qd_ttg_2018_tra_khuc,NuocTrong,dry_season,121,131,dry_operating_band,123,126,Appendix III,,,10
+qd_911_qd_ttg_2018_tra_khuc,NuocTrong,dry_season,201,210,dry_operating_band,122.9,125.9,Appendix III,,,9
+qd_911_qd_ttg_2018_tra_khuc,NuocTrong,dry_season,211,220,dry_operating_band,122.7,125.7,Appendix III,,,9
+qd_911_qd_ttg_2018_tra_khuc,NuocTrong,dry_season,221,229,dry_operating_band,122.5,125.5,Appendix III,,,
+qd_911_qd_ttg_2018_tra_khuc,NuocTrong,dry_season,301,310,dry_operating_band,121.9,124.9,Appendix III,,,9
+qd_911_qd_ttg_2018_tra_khuc,NuocTrong,dry_season,311,320,dry_operating_band,121.2,124.2,Appendix III,,,9
+qd_911_qd_ttg_2018_tra_khuc,NuocTrong,dry_season,321,331,dry_operating_band,120.2,123.2,Appendix III,,,10
+qd_911_qd_ttg_2018_tra_khuc,NuocTrong,dry_season,401,410,dry_operating_band,118.9,121.9,Appendix III,,,9
+qd_911_qd_ttg_2018_tra_khuc,NuocTrong,dry_season,411,420,dry_operating_band,118,121,Appendix III,,,9
+qd_911_qd_ttg_2018_tra_khuc,NuocTrong,dry_season,421,430,dry_operating_band,117.1,120.1,Appendix III,,,9
+qd_911_qd_ttg_2018_tra_khuc,NuocTrong,dry_season,501,510,dry_operating_band,116.5,119.5,Appendix III,,,9
+qd_911_qd_ttg_2018_tra_khuc,NuocTrong,dry_season,511,520,dry_operating_band,115.5,118.5,Appendix III,,,9
+qd_911_qd_ttg_2018_tra_khuc,NuocTrong,dry_season,521,531,dry_operating_band,113.8,116.8,Appendix III,,,10
+qd_911_qd_ttg_2018_tra_khuc,NuocTrong,dry_season,601,610,dry_operating_band,111.9,114.9,Appendix III,,,9
+qd_911_qd_ttg_2018_tra_khuc,NuocTrong,dry_season,611,620,dry_operating_band,110.4,113.4,Appendix III,,,9
+qd_911_qd_ttg_2018_tra_khuc,NuocTrong,dry_season,621,630,dry_operating_band,109.2,112.2,Appendix III,,,9
+qd_911_qd_ttg_2018_tra_khuc,NuocTrong,dry_season,701,710,dry_operating_band,108.3,111.3,Appendix III,,,9
+qd_911_qd_ttg_2018_tra_khuc,NuocTrong,dry_season,711,720,dry_operating_band,106.5,109.5,Appendix III,,,9
+qd_911_qd_ttg_2018_tra_khuc,NuocTrong,dry_season,721,731,dry_operating_band,104.2,107.2,Appendix III,,,10
+qd_911_qd_ttg_2018_tra_khuc,NuocTrong,dry_season,801,810,dry_operating_band,101.6,104.6,Appendix III,,,9
+qd_911_qd_ttg_2018_tra_khuc,NuocTrong,dry_season,811,820,dry_operating_band,100,103,Appendix III,,,9
+qd_911_qd_ttg_2018_tra_khuc,NuocTrong,dry_season,821,831,dry_operating_band,97.7,100.7,Appendix III,,,10
+qd_911_qd_ttg_2018_tra_khuc,SonTay,flood_season,901,1215,safety_levels,,202.76,Article 1.1.a; Article 4.5,,,314
+qd_911_qd_ttg_2018_tra_khuc,SonTra1A,flood_season,901,1215,safety_levels,,202.25,Article 1.1.a; Article 4.3,,,314

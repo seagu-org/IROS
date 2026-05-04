@@ -1,0 +1,51 @@
+# Python caches and local environments
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+.venv/
+venv/
+env/
+ENV/
+
+# Test and tool caches
+.pytest_cache/
+pytest-cache-*/
+.coverage
+htmlcov/
+
+# Streamlit local state
+.streamlit/secrets.toml
+
+# Desktop GUI and packaged app artifacts
+run_desktop_dashboard.py
+requirements-desktop.txt
+environment-desktop.yml
+build_desktop_exe.ps1
+ReservoirDashboard.spec
+build/
+dist/
+_MEI*/
+*.exe
+*.spec
+
+# Generated outputs and logs
+reservoir_dashboard/outputs/
+*.log
+
+# Optional local-only materials, not needed for Streamlit deployment
+docs/
+non_GUI.ipynb
+sample_upload_dakdrinh.csv
+reservoir_dashboard/tests/
+reservoir_dashboard/scripts/
+
+# OS and editor noise
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+
+# Temporary dependency files
+condaenv.*.requirements.txt
