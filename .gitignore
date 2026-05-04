@@ -18,20 +18,21 @@ htmlcov/
 .streamlit/secrets.toml
 
 # Desktop GUI and packaged app artifacts
-run_desktop_dashboard.py
-requirements-desktop.txt
-environment-desktop.yml
-build_desktop_exe.ps1
 ReservoirDashboard.spec
 build/
 dist/
 _MEI*/
+.nuitka-cache/
+*.build/
+*.dist/
+*.onefile-build/
 *.exe
 *.spec
 
 # Generated outputs and logs
 reservoir_dashboard/outputs/
 *.log
+nuitka-crash-report.xml
 
 # Optional local-only materials, not needed for Streamlit deployment
 docs/

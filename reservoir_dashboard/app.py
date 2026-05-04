@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import html
 from pathlib import Path
 
 import numpy as np
@@ -28,9 +29,15 @@ from reservoir_dashboard.src.data_loading import (
 from reservoir_dashboard.src.excel_conversion import convert_all_q_excel_to_csv, find_excel_for_reservoir
 from reservoir_dashboard.src.metrics import calculate_end_of_window_capacity_metrics, derive_reservoir_capacity_targets
 from reservoir_dashboard.src.plotting import plot_reservoir_timeseries
-from reservoir_dashboard.src.reservoir_model import level_to_storage, simulate_reservoir, summarize_physical_limit_violations
+from reservoir_dashboard.src.reservoir_model import (
+    estimate_outflow_from_inflow_and_level,
+    level_to_storage,
+    simulate_reservoir,
+    summarize_physical_limit_violations,
+)
 from reservoir_dashboard.src.scenarios import (
     compare_scenarios,
+    default_outflow_values,
     make_constant_outflow,
     make_default_outflow,
     make_manual_outflow,
@@ -79,9 +86,13 @@ STATIC_VN_LABELS = {
     "datetime": "Ngày giờ",
     "dead_storage": "Dung tích chết",
     "default_outflow": "Lưu lượng xả mặc định",
+    "default_outflow_source": "Nguồn lưu lượng xả mặc định",
     "design_flood_level_capacity_m3": "Dung tích tại mực nước lũ thiết kế (m3)",
+    "days_to_fill_from_average_inflow": "Số ngày để đầy theo lưu lượng đến trung bình",
+    "days_to_fill_from_inflow_only": "Số ngày để đầy theo lưu lượng đến",
     "dry_season": "Mùa cạn",
     "elevation_m": "Cao trình (m)",
+    "estimated_outflow_m3s": "Lưu lượng xả ước tính (m3/s)",
     "final_capacity_used_pct": "Tỷ lệ dung tích cuối kỳ đã sử dụng (%)",
     "final_simulated_water_level_m": "Mực nước mô phỏng cuối kỳ (m)",
     "final_storage_m3": "Dung tích cuối kỳ (m3)",
@@ -105,6 +116,8 @@ STATIC_VN_LABELS = {
     "level_m": "Mực nước (m)",
     "level_min_m": "Mực nước nhỏ nhất (m)",
     "manual_outflow": "Lưu lượng xả thủ công",
+    "missing_inflow_flag": "Thiếu lưu lượng đến",
+    "missing_water_level_flag": "Thiếu mực nước hồ",
     "max_capacity_used_pct": "Tỷ lệ dung tích lớn nhất đã sử dụng (%)",
     "max_physical_limit_excess_mcm": "Dung tích bị cắt lớn nhất (triệu m3)",
     "max_simulated_water_level_m": "Mực nước mô phỏng lớn nhất (m)",
@@ -114,9 +127,12 @@ STATIC_VN_LABELS = {
     "maximum_capacity_m3": "Dung tích lớn nhất (m3)",
     "min_simulated_water_level_m": "Mực nước mô phỏng nhỏ nhất (m)",
     "min_water_level_m": "Mực nước nhỏ nhất (m)",
+    "negative_outflow_flag": "Lưu lượng xả ước tính âm",
     "normal_water_level_capacity_m3": "Dung tích tại mực nước dâng bình thường (m3)",
+    "observed_outflow_m3s": "Lưu lượng xả trong CSV",
     "outflow_m3s": "Lưu lượng xả (m3/s)",
     "outflow_range_m3s": "Khoảng lưu lượng xả (m3/s)",
+    "outside_reasonable_range_flag": "Ngoài khoảng hợp lý",
     "parameter_name": "Tên thông số",
     "period_end_mmdd": "Ngày kết thúc kỳ (mmdd)",
     "period_start_mmdd": "Ngày bắt đầu kỳ (mmdd)",
@@ -131,6 +147,7 @@ STATIC_VN_LABELS = {
     "physical_limit_violation": "Chạm giới hạn vật lý",
     "physical_limit_violation_count": "Số bước thời gian chạm giới hạn vật lý",
     "possible_simulation_period": "Thời kỳ mô phỏng khả dụng",
+    "Qout_estimated_default": "Qout ước tính mặc định",
     "regulation_id": "Mã quy định",
     "remaining_percentage": "Tỷ lệ dung tích còn lại (%)",
     "remaining_pct": "Tỷ lệ dung tích còn lại (%)",
@@ -332,16 +349,78 @@ def datetime_range_label(df):
     return f"{datetimes.min()} đến {datetimes.max()}"
 
 
-def display_metric_grid(metrics_dict):
-    clean = {k: v for k, v in metrics_dict.items()}
-    for chunk_start in range(0, len(clean), 4):
-        cols = st.columns(4)
-        for col, (key, value) in zip(cols, list(clean.items())[chunk_start:chunk_start + 4]):
-            if isinstance(value, float):
-                shown = "Không có dữ liệu" if pd.isna(value) else f"{value:,.2f}"
-            else:
-                shown = str(display_value(value))
-            col.metric(display_label(key), shown)
+def format_summary_value(value):
+    if isinstance(value, (pd.Timestamp, np.datetime64)):
+        dt = pd.to_datetime(value, errors="coerce")
+        return "Không có dữ liệu" if pd.isna(dt) else dt.strftime("%Y-%m-%d %H:%M")
+    if isinstance(value, str):
+        return str(display_value(value))
+    if value is None:
+        return "Không có dữ liệu"
+    try:
+        if pd.isna(value):
+            return "Không có dữ liệu"
+    except (TypeError, ValueError):
+        pass
+    if isinstance(value, (int, float, np.integer, np.floating)):
+        return f"{float(value):,.2f}"
+    return str(display_value(value))
+
+
+def display_summary_sections(sections):
+    st.markdown(
+        """
+        <style>
+        .summary-table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+            font-size: 0.92rem;
+        }
+        .summary-table th,
+        .summary-table td {
+            border: 1px solid #e6e8eb;
+            padding: 0.55rem 0.65rem;
+            text-align: left;
+            vertical-align: top;
+            white-space: normal;
+            overflow-wrap: anywhere;
+        }
+        .summary-table th {
+            background: #f7f8fa;
+            color: #6b7280;
+            font-weight: 500;
+        }
+        .summary-table td:first-child,
+        .summary-table th:first-child {
+            width: 58%;
+        }
+        .summary-table td:last-child,
+        .summary-table th:last-child {
+            width: 42%;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+    cols = st.columns(len(sections))
+    for col, (title, rows) in zip(cols, sections):
+        body_rows = "\n".join(
+            "<tr>"
+            f"<td>{html.escape(display_label(key))}</td>"
+            f"<td>{html.escape(format_summary_value(value))}</td>"
+            "</tr>"
+            for key, value in rows
+        )
+        table_html = (
+            '<table class="summary-table">'
+            "<thead><tr><th>Chỉ tiêu</th><th>Giá trị</th></tr></thead>"
+            f"<tbody>{body_rows}</tbody>"
+            "</table>"
+        )
+        with col:
+            st.markdown(f"**{title}**")
+            st.markdown(table_html, unsafe_allow_html=True)
 
 
 def warn_physical_limit_violations(sim_df, label):
@@ -359,6 +438,63 @@ def warn_physical_limit_violations(sim_df, label):
         f"từ {first_dt} đến {last_dt}. Dung tích và mực nước được giữ tại "
         f"biên AEV. Loại: {types}. Dung tích bị cắt lớn nhất: {excess_text}."
     )
+
+
+def has_usable_series(df, column):
+    return df is not None and column in df.columns and pd.to_numeric(df[column], errors="coerce").notna().any()
+
+
+def numeric_mean_or_zero(values):
+    mean_value = pd.to_numeric(values, errors="coerce").mean()
+    return float(mean_value) if pd.notna(mean_value) else 0.0
+
+
+def prepare_default_outflow_inputs(selected_obs, hypsometry_df, source_choice="auto"):
+    if selected_obs is None or selected_obs.empty:
+        return selected_obs, "auto", None
+    out = selected_obs.copy()
+    if "outflow_m3s" not in out.columns:
+        out["outflow_m3s"] = np.nan
+    can_estimate = (
+        not hypsometry_df.empty
+        and has_usable_series(out, "inflow_m3s")
+        and has_usable_series(out, "water_level_m")
+    )
+    if can_estimate:
+        out = estimate_outflow_from_inflow_and_level(out, hypsometry_df)
+    has_observed_outflow = has_usable_series(out, "outflow_m3s")
+    if source_choice == "estimated" and can_estimate:
+        return out, "estimated", "Qout_estimated_default"
+    if not has_observed_outflow and can_estimate:
+        return out, "estimated", "Qout_estimated_default"
+    return out, "observed", "observed_outflow_m3s"
+
+
+def warn_estimated_default_outflow(selected_obs):
+    if selected_obs is None or selected_obs.empty or "estimated_outflow_m3s" not in selected_obs.columns:
+        return
+    st.info("Lưu lượng xả mặc định được ước tính từ lưu lượng đến và mực nước hồ bằng cân bằng khối lượng.")
+    negative_count = int(selected_obs.get("negative_outflow_flag", pd.Series(dtype=bool)).fillna(False).sum())
+    if negative_count:
+        st.warning(
+            "Lưu lượng xả ước tính có giá trị âm. Dashboard giữ nguyên giá trị này, không cắt về 0. "
+            "Nguyên nhân có thể là lưu lượng đến bị đánh giá thấp, mực nước nhiễu, sai đường AEV, "
+            "thiếu mưa trực tiếp trên mặt hồ, lệch timestamp, hoặc lỗi chất lượng dữ liệu."
+        )
+    flag_cols = [
+        "negative_outflow_flag",
+        "outside_reasonable_range_flag",
+        "missing_water_level_flag",
+        "missing_inflow_flag",
+    ]
+    counts = {
+        col: int(selected_obs[col].fillna(False).sum())
+        for col in flag_cols
+        if col in selected_obs.columns and selected_obs[col].fillna(False).any()
+    }
+    if counts:
+        shown_counts = {display_label(col): count for col, count in counts.items()}
+        st.write("Cờ dữ liệu của lưu lượng xả ước tính:", shown_counts)
 
 
 try:
@@ -419,6 +555,25 @@ with st.sidebar:
         custom_end_datetime = None
 
 selected_obs = filter_time_window(obs_df, start_datetime, window_option, custom_end_datetime) if not obs_df.empty else pd.DataFrame()
+default_outflow_source_choice = "auto"
+if not selected_obs.empty:
+    has_observed_outflow = has_usable_series(selected_obs, "outflow_m3s")
+    has_water_level = has_usable_series(selected_obs, "water_level_m")
+    has_inflow = has_usable_series(selected_obs, "inflow_m3s")
+    if has_observed_outflow and has_water_level and has_inflow and not hypsometry_df.empty:
+        with st.sidebar:
+            default_source_label = st.radio(
+                "Nguồn lưu lượng xả mặc định",
+                ["Dùng outflow_m3s trong CSV", "Ước tính Qout từ Qin và mực nước hồ"],
+                index=0,
+            )
+        if default_source_label == "Ước tính Qout từ Qin và mực nước hồ":
+            default_outflow_source_choice = "estimated"
+selected_obs, default_outflow_source, default_outflow_label = prepare_default_outflow_inputs(
+    selected_obs,
+    hypsometry_df,
+    default_outflow_source_choice,
+)
 initial_water_level_m, initial_datetime, exact_initial_level = get_initial_water_level(selected_obs)
 initial_water_level_source = "CSV water_level_m"
 
@@ -458,8 +613,13 @@ baseline_sim = pd.DataFrame()
 baseline_metrics = {}
 level_reference_df = pd.DataFrame()
 
-if not selected_obs.empty and not hypsometry_df.empty and pd.notna(initial_water_level_m):
-    default_outflow = make_default_outflow(selected_obs)
+if (
+    not selected_obs.empty
+    and not hypsometry_df.empty
+    and pd.notna(initial_water_level_m)
+    and not default_outflow_values(selected_obs, default_outflow_source)[0].isna().all()
+):
+    default_outflow = make_default_outflow(selected_obs, default_outflow_source)
     baseline_sim = simulate_reservoir(selected_obs, default_outflow, initial_water_level_m, hypsometry_df, parameter_rows)
     level_reference_df = build_parameter_level_reference_series(baseline_sim, parameter_rows, active_season, hypsometry_df)
     capacity_targets = derive_reservoir_capacity_targets(parameter_rows, hypsometry_df, pd.DataFrame(), active_season)
@@ -508,32 +668,58 @@ with tab_baseline:
         st.error("Không có đường quan hệ AEV cho hồ chứa đã chọn. Mô phỏng bị tắt.")
     elif pd.isna(initial_water_level_m):
         st.error("Thiếu mực nước ban đầu. Hãy nhập mực nước ban đầu tùy chỉnh trong thanh bên.")
-    elif selected_obs[["inflow_m3s", "outflow_m3s"]].isna().all().any():
+    elif selected_obs["inflow_m3s"].isna().all() or default_outflow_values(selected_obs, default_outflow_source)[0].isna().all():
         st.error("Thiếu lưu lượng đến hoặc lưu lượng xả. Mô phỏng bị tắt.")
     else:
-        key_metrics = {
-            "active_season": active_season or "ambiguous_or_missing",
-            "selected_simulation_start_datetime": selected_obs["datetime"].min(),
-            "selected_simulation_end_datetime": selected_obs["datetime"].max(),
-            "initial_water_level_m": initial_water_level_m,
-            "initial_storage_mcm": level_to_storage(initial_water_level_m, hypsometry_df) / 1e6,
-            "inflow_range_m3s": f"{selected_obs['inflow_m3s'].min():,.2f} đến {selected_obs['inflow_m3s'].max():,.2f}",
-            "outflow_range_m3s": f"{selected_obs['outflow_m3s'].min():,.2f} đến {selected_obs['outflow_m3s'].max():,.2f}",
-            "max_simulated_water_level_m": baseline_sim["water_level_m"].max(),
-            "min_simulated_water_level_m": baseline_sim["water_level_m"].min(),
-            "final_simulated_water_level_m": baseline_sim["water_level_m"].iloc[-1],
-            "final_storage_mcm": baseline_sim["storage_mcm"].iloc[-1],
-            "capacity_target_type": baseline_metrics.get("capacity_target_type", "unavailable"),
-            "capacity_used_percentage": baseline_metrics.get("capacity_used_pct", np.nan),
-            "remaining_storage_mcm": baseline_metrics.get("remaining_storage_mcm", np.nan),
-            "remaining_percentage": baseline_metrics.get("remaining_pct", np.nan),
-            "hours_to_fill_from_average_inflow": baseline_metrics.get("hours_to_fill_from_inflow_only", np.nan),
-            "days_to_fill_from_average_inflow": baseline_metrics.get("days_to_fill_from_inflow_only", np.nan),
-        }
-        display_metric_grid(key_metrics)
+        default_outflow_series, _ = default_outflow_values(selected_obs, default_outflow_source)
+        if default_outflow_label == "Qout_estimated_default":
+            warn_estimated_default_outflow(selected_obs)
+        inflow_range = f"{selected_obs['inflow_m3s'].min():,.2f} đến {selected_obs['inflow_m3s'].max():,.2f}"
+        outflow_range = f"{default_outflow_series.min():,.2f} đến {default_outflow_series.max():,.2f}"
+        display_summary_sections(
+            [
+                (
+                    "Cửa sổ và dữ liệu",
+                    [
+                        ("active_season", active_season or "ambiguous_or_missing"),
+                        ("selected_simulation_start_datetime", selected_obs["datetime"].min()),
+                        ("selected_simulation_end_datetime", selected_obs["datetime"].max()),
+                        ("default_outflow_source", default_outflow_label),
+                        ("inflow_range_m3s", inflow_range),
+                        ("outflow_range_m3s", outflow_range),
+                    ],
+                ),
+                (
+                    "Mực nước và dung tích",
+                    [
+                        ("initial_water_level_m", initial_water_level_m),
+                        ("initial_storage_mcm", level_to_storage(initial_water_level_m, hypsometry_df) / 1e6),
+                        ("max_simulated_water_level_m", baseline_sim["water_level_m"].max()),
+                        ("min_simulated_water_level_m", baseline_sim["water_level_m"].min()),
+                        ("final_simulated_water_level_m", baseline_sim["water_level_m"].iloc[-1]),
+                        ("final_storage_mcm", baseline_sim["storage_mcm"].iloc[-1]),
+                    ],
+                ),
+                (
+                    "Dung tích còn lại",
+                    [
+                        ("capacity_target_type", baseline_metrics.get("capacity_target_type", "unavailable")),
+                        ("capacity_used_percentage", baseline_metrics.get("capacity_used_pct", np.nan)),
+                        ("remaining_storage_mcm", baseline_metrics.get("remaining_storage_mcm", np.nan)),
+                        ("remaining_percentage", baseline_metrics.get("remaining_pct", np.nan)),
+                        ("hours_to_fill_from_average_inflow", baseline_metrics.get("hours_to_fill_from_inflow_only", np.nan)),
+                        ("days_to_fill_from_average_inflow", baseline_metrics.get("days_to_fill_from_inflow_only", np.nan)),
+                    ],
+                ),
+            ]
+        )
         warn_physical_limit_violations(baseline_sim, "Mô phỏng cơ sở")
         st.plotly_chart(
-            plot_reservoir_timeseries(selected_obs, {"default_outflow": {"simulation": baseline_sim}}, level_reference_df),
+            plot_reservoir_timeseries(
+                selected_obs,
+                {"default_outflow": {"simulation": baseline_sim, "outflow_source": default_outflow_label}},
+                level_reference_df,
+            ),
             use_container_width=True,
             key="baseline_timeseries_plot",
         )
@@ -547,20 +733,21 @@ with tab_scenarios:
     else:
         scenario_type_label = st.selectbox("Loại kịch bản tùy chỉnh", list(SCENARIO_TYPE_OPTIONS.keys()))
         scenario_type = SCENARIO_TYPE_OPTIONS[scenario_type_label]
-        custom_outflow = make_default_outflow(selected_obs)
+        default_outflow_series, _ = default_outflow_values(selected_obs, default_outflow_source)
+        custom_outflow = make_default_outflow(selected_obs, default_outflow_source)
         if scenario_type == "Constant outflow":
-            value = st.number_input("Lưu lượng xả không đổi (m3/s)", min_value=0.0, value=float(selected_obs["outflow_m3s"].mean() or 0.0))
+            value = st.number_input("Lưu lượng xả không đổi (m3/s)", min_value=0.0, value=numeric_mean_or_zero(default_outflow_series))
             custom_outflow = make_constant_outflow(selected_obs, value)
         elif scenario_type == "Multiplier scenario":
             multiplier = st.number_input("Hệ số nhân lưu lượng xả", min_value=0.0, value=1.0, step=0.1)
-            custom_outflow = make_multiplier_outflow(selected_obs, multiplier)
+            custom_outflow = make_multiplier_outflow(selected_obs, multiplier, default_outflow_source)
         elif scenario_type == "Time-window adjustment":
             adj_start = st.selectbox("Thời điểm bắt đầu điều chỉnh", selected_obs["datetime"].astype(str).tolist(), index=0)
             adj_end = st.selectbox("Thời điểm kết thúc điều chỉnh", selected_obs["datetime"].astype(str).tolist(), index=len(selected_obs) - 1)
-            value = st.number_input("Lưu lượng xả thay thế (m3/s)", min_value=0.0, value=float(selected_obs["outflow_m3s"].mean() or 0.0), key="replacement_outflow")
-            custom_outflow = make_time_window_outflow(selected_obs, adj_start, adj_end, value)
+            value = st.number_input("Lưu lượng xả thay thế (m3/s)", min_value=0.0, value=numeric_mean_or_zero(default_outflow_series), key="replacement_outflow")
+            custom_outflow = make_time_window_outflow(selected_obs, adj_start, adj_end, value, default_outflow_source)
         elif scenario_type == "Manual table editor":
-            edit_base = make_default_outflow(selected_obs)
+            edit_base = make_default_outflow(selected_obs, default_outflow_source)
             editable_columns = {display_label(col): col for col in edit_base.columns}
             edited = st.data_editor(
                 edit_base.rename(columns={raw: shown for shown, raw in editable_columns.items()}),
@@ -570,12 +757,16 @@ with tab_scenarios:
             custom_outflow = make_manual_outflow(edited)
 
         custom_name = custom_outflow["scenario_name"].iloc[0]
-        default_sim = baseline_sim if not baseline_sim.empty else simulate_reservoir(selected_obs, make_default_outflow(selected_obs), initial_water_level_m, hypsometry_df, parameter_rows)
+        default_sim = baseline_sim if not baseline_sim.empty else simulate_reservoir(selected_obs, make_default_outflow(selected_obs, default_outflow_source), initial_water_level_m, hypsometry_df, parameter_rows)
         custom_sim = simulate_reservoir(selected_obs, custom_outflow, initial_water_level_m, hypsometry_df, parameter_rows)
         scenario_results = {
-            "default_outflow": {"simulation": default_sim, "obs_df": selected_obs},
+            "default_outflow": {"simulation": default_sim, "obs_df": selected_obs, "outflow_source": default_outflow_label},
             custom_name: {"simulation": custom_sim, "obs_df": selected_obs},
         }
+        if custom_name == "default_outflow":
+            scenario_results = {
+                "default_outflow": {"simulation": default_sim, "obs_df": selected_obs, "outflow_source": default_outflow_label}
+            }
         comparison = compare_scenarios(scenario_results, pd.DataFrame(), capacity_targets)
         warn_physical_limit_violations(default_sim, "Mô phỏng lưu lượng xả mặc định")
         warn_physical_limit_violations(custom_sim, f"Mô phỏng {display_value(custom_name)}")

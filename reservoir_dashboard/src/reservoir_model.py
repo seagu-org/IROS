@@ -14,14 +14,30 @@ def prepare_hypsometry(df):
         "Dungtich_10^6m3": "volume_mcm",
     }
     out = out.rename(columns=rename)
-    needed = ["elevation_m", "area_km2", "volume_mcm"]
-    for col in needed:
-        if col not in out.columns:
-            raise ValueError(f"Missing hypsometry column: {col}")
-        out[col] = pd.to_numeric(out[col], errors="coerce")
+    if "elevation_m" not in out.columns:
+        raise ValueError("Missing hypsometry column: elevation_m")
+    if "volume_m3" not in out.columns and "volume_mcm" not in out.columns:
+        raise ValueError("Missing hypsometry column: volume_m3 or volume_mcm")
+    out["elevation_m"] = pd.to_numeric(out["elevation_m"], errors="coerce")
+    if "volume_m3" in out.columns:
+        out["volume_m3"] = pd.to_numeric(out["volume_m3"], errors="coerce")
+    else:
+        out["volume_m3"] = pd.to_numeric(out["volume_mcm"], errors="coerce") * 1e6
+    if "volume_mcm" in out.columns:
+        out["volume_mcm"] = pd.to_numeric(out["volume_mcm"], errors="coerce")
+    else:
+        out["volume_mcm"] = out["volume_m3"] / 1e6
+    if "area_m2" in out.columns:
+        out["area_m2"] = pd.to_numeric(out["area_m2"], errors="coerce")
+    elif "area_km2" in out.columns:
+        out["area_m2"] = pd.to_numeric(out["area_km2"], errors="coerce") * 1e6
+    else:
+        out["area_m2"] = np.nan
+    if "area_km2" in out.columns:
+        out["area_km2"] = pd.to_numeric(out["area_km2"], errors="coerce")
+    else:
+        out["area_km2"] = out["area_m2"] / 1e6
     out = out.dropna(subset=["elevation_m", "volume_mcm"])
-    out["area_m2"] = pd.to_numeric(out["area_km2"], errors="coerce") * 1e6
-    out["volume_m3"] = out["volume_mcm"] * 1e6
     out = out.sort_values(["elevation_m", "volume_m3"])
     out = out.groupby("elevation_m", as_index=False).agg({"area_km2": "mean", "area_m2": "mean", "volume_mcm": "mean", "volume_m3": "mean"})
     out = out.sort_values(["volume_m3", "elevation_m"])
@@ -56,6 +72,73 @@ def derive_capacity_from_level(level_m, hypsometry_df):
     return level_to_storage(level_m, hypsometry_df)
 
 
+def estimate_outflow_from_inflow_and_level(obs_df, hypsometry_df):
+    """Estimate default outflow from inflow and observed reservoir level.
+
+    The estimate uses mass balance:
+    Qout = Qin - (storage_t - storage_t_minus_1) / dt_seconds.
+    It is an estimated default series, not an observed outflow series.
+    """
+    output_columns = [
+        "datetime",
+        "storage_m3",
+        "storage_mcm",
+        "storage_change_m3",
+        "dt_seconds",
+        "estimated_outflow_m3s",
+        "negative_outflow_flag",
+        "outside_reasonable_range_flag",
+        "missing_water_level_flag",
+        "missing_inflow_flag",
+    ]
+    if obs_df is None or obs_df.empty:
+        return pd.DataFrame(columns=output_columns)
+
+    out = obs_df.copy()
+    if "datetime" not in out.columns:
+        raise ValueError("Observed timeseries must include datetime")
+    if "water_level_m" not in out.columns:
+        out["water_level_m"] = np.nan
+    if "inflow_m3s" not in out.columns:
+        out["inflow_m3s"] = np.nan
+
+    out["datetime"] = pd.to_datetime(out["datetime"], errors="coerce")
+    out["water_level_m"] = pd.to_numeric(out["water_level_m"], errors="coerce")
+    out["inflow_m3s"] = pd.to_numeric(out["inflow_m3s"], errors="coerce")
+    out = out.dropna(subset=["datetime"]).sort_values("datetime").reset_index(drop=True)
+
+    h = prepare_hypsometry(hypsometry_df)
+    min_level = h["elevation_m"].min() if not h.empty else np.nan
+    max_level = h["elevation_m"].max() if not h.empty else np.nan
+    water = out["water_level_m"]
+    out["missing_water_level_flag"] = water.isna()
+    out["missing_inflow_flag"] = out["inflow_m3s"].isna()
+    outside_aev_level = water.notna() & (
+        pd.isna(min_level) | pd.isna(max_level) | (water < min_level) | (water > max_level)
+    )
+
+    out["storage_m3"] = water.map(lambda level: level_to_storage(level, h))
+    out["storage_mcm"] = out["storage_m3"] / 1e6
+    out["storage_change_m3"] = out["storage_m3"] - out["storage_m3"].shift(1)
+    out["dt_seconds"] = out["datetime"].diff().dt.total_seconds()
+    valid_dt = out["dt_seconds"] > 0
+    out["estimated_outflow_m3s"] = np.nan
+    valid_estimate = (
+        valid_dt
+        & out["storage_change_m3"].notna()
+        & out["inflow_m3s"].notna()
+        & out["storage_m3"].notna()
+    )
+    out.loc[valid_estimate, "estimated_outflow_m3s"] = (
+        out.loc[valid_estimate, "inflow_m3s"]
+        - out.loc[valid_estimate, "storage_change_m3"] / out.loc[valid_estimate, "dt_seconds"]
+    )
+    out["negative_outflow_flag"] = out["estimated_outflow_m3s"] < 0
+    invalid_dt_after_first = out.index.to_series().gt(0) & ~valid_dt.fillna(False)
+    out["outside_reasonable_range_flag"] = outside_aev_level | invalid_dt_after_first
+    return out
+
+
 def summarize_physical_limit_violations(sim_df):
     if sim_df is None or sim_df.empty or "physical_limit_violation" not in sim_df:
         return {}
@@ -77,9 +160,11 @@ def simulate_reservoir(obs_df, scenario_outflow_df, initial_water_level_m, hypso
     obs = obs_df.copy().sort_values("datetime").reset_index(drop=True)
     out = scenario_outflow_df[["datetime", "outflow_m3s"]].copy()
     sim = obs.merge(out, on="datetime", how="left", suffixes=("_default", ""))
+    outflow_source = scenario_outflow_df.get("outflow_source", pd.Series(["observed_outflow_m3s"])).iloc[0]
     if "outflow_m3s" not in sim.columns:
         sim["outflow_m3s"] = sim["outflow_m3s_default"]
-    sim["outflow_m3s"] = sim["outflow_m3s"].fillna(sim.get("outflow_m3s_default"))
+    elif outflow_source != "Qout_estimated_default":
+        sim["outflow_m3s"] = sim["outflow_m3s"].fillna(sim.get("outflow_m3s_default"))
     scenario_name = scenario_outflow_df.get("scenario_name", pd.Series(["default_outflow"])).iloc[0]
     reservoir_name = obs["reservoir_name_en"].iloc[0] if "reservoir_name_en" in obs.columns and len(obs) else ""
     h = prepare_hypsometry(hypsometry_df)

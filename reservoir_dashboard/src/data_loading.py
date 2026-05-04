@@ -102,12 +102,14 @@ def load_clean_observed_timeseries(csv_folder, selected_reservoir):
 
 def clean_observed_timeseries_dataframe(df, selected_reservoir):
     out = df.copy()
-    required = ["datetime", "inflow_m3s", "outflow_m3s"]
+    required = ["datetime", "inflow_m3s"]
     missing = [col for col in required if col not in out.columns]
     if missing:
         raise ValueError("Observed CSV must include columns: " + ", ".join(required))
     if "reservoir_name_en" not in out.columns:
         out["reservoir_name_en"] = selected_reservoir
+    if "outflow_m3s" not in out.columns:
+        out["outflow_m3s"] = np.nan
     if "water_level_m" not in out.columns:
         out["water_level_m"] = np.nan
     out["datetime"] = pd.to_datetime(out["datetime"], errors="coerce")
